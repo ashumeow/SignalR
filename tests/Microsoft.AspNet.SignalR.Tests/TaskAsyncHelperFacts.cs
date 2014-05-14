@@ -20,14 +20,13 @@ namespace Microsoft.AspNet.SignalR.Tests
             var testCulture = new CultureInfo("zh-Hans");
             var testUICulture = new CultureInfo("zh-CN");
 
-            Func<Task> saveThreadCulture = () =>
+            Action saveThreadCulture = () =>
             {
                 tcs.SetResult(Thread.CurrentThread.CurrentCulture);
                 uiTcs.SetResult(Thread.CurrentThread.CurrentUICulture);
-                return TaskAsyncHelper.Empty;
             };
 
-            Action<IEnumerable<Func<Task<object>>>, Action<Task<object>>> ensureCulturePreserved = (taskGenerators, testAction) =>
+            Action<IEnumerable<Func<Task>>, Action<Task>> ensureCulturePreserved = (taskGenerators, testAction) =>
             {
                 foreach (var taskGenerator in taskGenerators)
                 {
@@ -44,29 +43,54 @@ namespace Microsoft.AspNet.SignalR.Tests
                 Thread.CurrentThread.CurrentCulture = testCulture;
                 Thread.CurrentThread.CurrentUICulture = testUICulture;
 
-                var successfulTaskGenerators = new Func<Task<object>>[]
+                var successfulTaskGenerators = new Func<Task>[]
                 {
-                    () => TaskAsyncHelper.FromResult<object>(null),                                          // Completed
-                    () => TaskAsyncHelper.Delay(TimeSpan.FromMilliseconds(50)).Then(() => (object)null),     // Async Completed
+                    () => TaskAsyncHelper.FromResult<object>(null), // Completed
+                    async () => await Task.Yield(), // Async Completed
                 };
 
-                // Non-generic Then with sync/async completed tasks
+                // Then with sync/async completed tasks
                 ensureCulturePreserved(successfulTaskGenerators, task => task.Then(saveThreadCulture));
 
                 var faultedTcs = new TaskCompletionSource<object>();
                 var canceledTcs = new TaskCompletionSource<object>();
                 faultedTcs.SetException(new Exception());
                 canceledTcs.SetCanceled();
-                var allTaskGenerators = successfulTaskGenerators.Concat(new Func<Task<object>>[]
+                var allTaskGenerators = successfulTaskGenerators.Concat(new Func<Task>[]
                 {
-                    () => faultedTcs.Task,                                                                   // Faulted
-                    () => canceledTcs.Task,                                                                  // Canceled
-                    () => TaskAsyncHelper.Delay(TimeSpan.FromMilliseconds(50)).Then(() => faultedTcs.Task),  // Async Faulted
-                    () => TaskAsyncHelper.Delay(TimeSpan.FromMilliseconds(50)).Then(() => canceledTcs.Task), // Async Canceled
+                    () => faultedTcs.Task, // Faulted
+                    () => canceledTcs.Task, // Canceled
+                    async () => 
+                    {
+                        await Task.Yield();
+                        throw new Exception();
+                    },  // Async Faulted
+                    async () =>
+                    {
+                        await Task.Yield();
+                        throw new OperationCanceledException();
+                    } // Async Canceled
                 });
 
-                // Generic ContinueWithPreservedCulture with sync/async faulted, canceled and completed tasks
+                // ContinueWithPreservedCulture with sync/async faulted, canceled and completed tasks
                 ensureCulturePreserved(allTaskGenerators, task => task.ContinueWithPreservedCulture(_ => saveThreadCulture()));
+
+                // PreserveCultureAwaiter with sync/async faulted, canceled and completed tasks
+                ensureCulturePreserved(allTaskGenerators, async task =>
+                {
+                    try
+                    {
+                        await task.PreserveCulture();
+                    }
+                    catch
+                    {
+                        // The MSBuild xUnit.net runner crashes if we don't catch here
+                    }
+                    finally
+                    {
+                        saveThreadCulture();
+                    }
+                });
 
                 // Verify that threads in the ThreadPool keep the default culture
                 tcs = new TaskCompletionSource<CultureInfo>();
