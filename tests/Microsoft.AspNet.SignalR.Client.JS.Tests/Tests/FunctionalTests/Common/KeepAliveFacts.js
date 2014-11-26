@@ -23,6 +23,7 @@ testUtilities.runWithTransports(["foreverFrame", "serverSentEvents", "webSockets
         connection.start({ transport: transport }).done(function () {
             assert.ok(true, "Connected.");
             assert.ok(connection._.keepAliveData.monitoring === true, "We should be monitoring the keep alive for the " + transport + " transport.");
+
             end();
         });
 
@@ -75,5 +76,6 @@ QUnit.asyncTimeoutTest("Check if alive can recover from faulty connections.", te
     return function () {
         $.signalR.transports._logic.markLastMessage = savedMarkLastMessage;
         $.signalR.transports._logic.stopMonitoringKeepAlive(connection);
+        window.clearTimeout(connection._.beatHandle);
     };
 });

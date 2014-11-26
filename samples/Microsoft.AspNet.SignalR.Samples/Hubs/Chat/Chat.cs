@@ -9,8 +9,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.Security.Application;
-using Microsoft.AspNet.SignalR.Hubs;
 using Microsoft.AspNet.SignalR.Samples.Hubs.Chat.ContentProviders;
 
 namespace Microsoft.AspNet.SignalR.Samples.Hubs.Chat
@@ -73,7 +71,7 @@ namespace Microsoft.AspNet.SignalR.Samples.Hubs.Chat
 
         public void Send(string content)
         {
-            content = Sanitizer.GetSafeHtmlFragment(content);
+            content = content.Replace("<", "&lt;").Replace(">", "&gt;");
 
             if (!TryHandleCommand(content))
             {
@@ -123,7 +121,7 @@ namespace Microsoft.AspNet.SignalR.Samples.Hubs.Chat
             }
         }
 
-        public override Task OnDisconnected()
+        public override Task OnDisconnected(bool stopCalled)
         {
             ChatUser user = _users.Values.FirstOrDefault(u => u.ConnectionId == Context.ConnectionId);
             if (user != null)

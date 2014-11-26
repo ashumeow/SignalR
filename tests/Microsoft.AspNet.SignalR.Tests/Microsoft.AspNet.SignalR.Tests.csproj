@@ -41,9 +41,9 @@
     <Reference Include="Moq">
       <HintPath>..\..\packages\Moq.4.0.10827\lib\NET40\Moq.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Newtonsoft.Json.5.0.6\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\packages\Newtonsoft.Json.6.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -89,6 +89,8 @@
     <Compile Include="BufferTextWriterFacts.cs" />
     <Compile Include="Server\AckHandlerFacts.cs" />
     <Compile Include="Server\Hubs\HubFacts.cs" />
+    <Compile Include="Server\Hubs\HubProgressFacts.cs" />
+    <Compile Include="Server\Hubs\TypedClientBuilderFacts.cs" />
     <Compile Include="Server\ProtocolResolverFacts.cs" />
     <Compile Include="Server\ScaleoutStreamManagerFacts.cs" />
     <Compile Include="Server\ServiceBusConfigurationFacts.cs" />
@@ -112,6 +114,7 @@
     <Compile Include="Server\TopicFacts.cs" />
     <Compile Include="Server\Transports\ForeverTransportFacts.cs" />
     <Compile Include="Owin\WebSocketFacts.cs" />
+    <Compile Include="Server\Transports\LongPollingTransportFacts.cs" />
     <Compile Include="Server\Transports\WebsocketTransportFacts.cs" />
     <Compile Include="SipHashBasedStringEqualityComparerFacts.cs" />
     <Compile Include="StringMinifierFacts.cs" />

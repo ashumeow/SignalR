@@ -82,7 +82,7 @@ namespace Microsoft.AspNet.SignalR.Client
         {
         }
 
-        public override void OnReconnecting()
+        internal override void OnReconnecting()
         {
             ClearInvocationCallbacks(Resources.Message_Reconnecting);
             base.OnReconnecting();
@@ -91,7 +91,28 @@ namespace Microsoft.AspNet.SignalR.Client
         [SuppressMessage("Microsoft.Design", "CA1062:Validate arguments of public methods", MessageId = "0", Justification = "")]
         protected override void OnMessageReceived(JToken message)
         {
-            if (message["I"] != null)
+            // We have to handle progress updates first in order to ensure old clients that receive
+            // progress updates enter the return value branch and then no-op when they can't find
+            // the callback in the map (because the message["I"[ value will not be a valid callback ID)
+            if (message["P"] != null)
+            {
+                var result = message.ToObject<HubResult>(JsonSerializer);
+                Action<HubResult> callback;
+
+                lock (_callbacks)
+                {
+                    if (!_callbacks.TryGetValue(result.ProgressUpdate.Id, out callback))
+                    {
+                        Trace(TraceLevels.Messages, "Callback with id " + result.ProgressUpdate.Id + " not found!");
+                    }
+                }
+
+                if (callback != null)
+                {
+                    callback(result);
+                }
+            }
+            else if (message["I"] != null)
             {
                 var result = message.ToObject<HubResult>(JsonSerializer);
                 Action<HubResult> callback;
@@ -207,17 +228,24 @@ namespace Microsoft.AspNet.SignalR.Client
 
         private void ClearInvocationCallbacks(string error)
         {
-            var result = new HubResult();
-            result.Error = error;
+            // Copy the callbacks then clear the list so if any of them happen to do an Invoke again
+            // they can safely register their own callback into the global list again.
+            // Once the global list is clear, dispatch the callbacks on their own threads (BUG #3101)
+
+            Action<HubResult>[] callbacks;
 
             lock (_callbacks)
             {
-                foreach (var callback in _callbacks.Values)
-                {
-                    callback(result);
-                }
-
+                callbacks = _callbacks.Values.ToArray();
                 _callbacks.Clear();
+            }
+
+            foreach (var callback in callbacks)
+            {
+                // Create a new HubResult each time as it's mutable and we don't want callbacks
+                // changing it during their parallel invocation
+                Task.Factory.StartNew(() => callback(new HubResult { Error = error }))
+                    .Catch();
             }
         }
     }

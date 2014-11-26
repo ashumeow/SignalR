@@ -1,13 +1,12 @@
 using System;
-using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Web;
-using System.Web.Cors;
 using System.Web.Routing;
+using Microsoft.AspNet.SignalR.Configuration;
 using Microsoft.AspNet.SignalR.Infrastructure;
 using Microsoft.AspNet.SignalR.StressServer.Connections;
 using Microsoft.AspNet.SignalR.Tests.Common;
@@ -23,8 +22,6 @@ using Owin;
 
 namespace Microsoft.AspNet.SignalR.Tests.Common
 {
-    using AppFunc = Func<IDictionary<string, object>, Task>;
-
     public static class Initializer
     {
         public static void Start()
@@ -45,6 +42,15 @@ namespace Microsoft.AspNet.SignalR.Tests.Common
 
                 e.SetObserved();
             };
+
+            var attachToPreSendRequestHeadersRaw = ConfigurationManager.AppSettings["attachToPreSendRequestHeaders"];
+
+            // It is too late to add a module in the Configuration method, so we are adding it here if necessary.
+            bool attachToPreSendRequestHeaders;
+            if (Boolean.TryParse(attachToPreSendRequestHeadersRaw, out attachToPreSendRequestHeaders) && attachToPreSendRequestHeaders)
+            {
+                HttpApplication.RegisterModule(typeof(PreSendRequestHeadersModule));
+            }
         }
 
         public static void Configuration(IAppBuilder app)
@@ -123,7 +129,7 @@ namespace Microsoft.AspNet.SignalR.Tests.Common
                 map.RunSignalR<MySendingConnection>(config);
             });
 
-            app.Map("/autoencodedjson", map =>
+            app.Map("/echo", map =>
             {
                 map.UseCors(CorsOptions.AllowAll);
                 map.RunSignalR<EchoConnection>(config);
@@ -172,9 +178,9 @@ namespace Microsoft.AspNet.SignalR.Tests.Common
             app.MapSignalR<SyncErrorConnection>("/sync-error", config);
             app.MapSignalR<AddGroupOnConnectedConnection>("/add-group", config);
             app.MapSignalR<UnusableProtectedConnection>("/protected", config);
-            app.MapSignalR<FallbackToLongPollingConnection>("/fall-back", config);
             app.MapSignalR<FallbackToLongPollingConnectionThrows>("/fall-back-throws", config);
             app.MapSignalR<PreserializedJsonConnection>("/preserialize", config);
+            app.MapSignalR<AsyncOnConnectedConnection>("/async-on-connected", config);
 
             // This subpipeline is protected by basic auth
             app.Map("/basicauth", map =>
@@ -261,6 +267,35 @@ namespace Microsoft.AspNet.SignalR.Tests.Common
                 };
 
                 map.MapSignalR(subHubsConfig);
+            });
+
+            app.Map("/fall-back", map =>
+            {
+                map.Use((context, next) =>
+                {
+                    if (!context.Request.Path.Value.Contains("negotiate") &&
+                        !context.Request.QueryString.Value.Contains("longPolling"))
+                    {
+                        context.Response.Body = new MemoryStream();
+                    }
+
+                    return next();
+                });
+
+                map.RunSignalR<FallbackToLongPollingConnection>();
+            });
+
+            app.Map("/no-init", map =>
+            {
+                map.Use((context, next) =>
+                {
+                    if (context.Request.Path.Value.Contains("connect"))
+                    {
+                        context.Response.Body = new MemoryStream();
+                    }
+
+                    return next();
+                });
             });
 
             app.Map("/force-lp-reconnect", map =>
